@@ -40,6 +40,7 @@ signals:
     void lineCountChanged(int count);
     void lineSelected(bool hasSelection);
 
+
 private:
     QGraphicsScene *scene;
     QList<QGraphicsLineItem*> annotationLines;

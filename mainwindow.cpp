@@ -7,36 +7,55 @@
 #include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
+    : QMainWindow(parent), isCurrentImageDicom(false), isDrawingMode(false)
 {
-    // Window properties
-    setWindowTitle("Medical Image Viewer");
-    resize(1000, 700);
-
-    // graphics image components
+    // Create graphics components
     scene = new QGraphicsScene(this);
     imageView = new ImageViewer(this);
     imageView->setScene(scene);
 
-    // DICOM loader
+    // Create DICOM loader
     dicomLoader = new DicomLoader();
 
-    // metadata display
-    metadataDisplay = new QTextEdit(this);
-    metadataDisplay->setMaximumWidth(300);
-    metadataDisplay->setReadOnly(true);
-    metadataDisplay->setFont(QFont("Courier", 15));
+    // Create annotation manager
+    annotationManager = new AnnotationManager(scene, this);
 
-    // splitter to divide image and data
+    // Connect annotation manager to image viewer
+    imageView->setAnnotationManager(annotationManager);
+
+    // Connect annotation manager signals
+    connect(annotationManager, &AnnotationManager::lineCountChanged,
+            this, &MainWindow::updateAnnotationStatus);
+    connect(annotationManager, &AnnotationManager::lineSelected,
+            this, &MainWindow::updateSelectionStatus);
+
+    // Create metadata display
+    metadataDisplay = new QTextEdit(this);
+    metadataDisplay->setMaximumWidth(250);
+    metadataDisplay->setReadOnly(true);
+    metadataDisplay->setFont(QFont("Arial", 13));
+
+    // Create annotation controls
+    createAnnotationControls();
+
+    // Create right panel with metadata and controls
+    QWidget *rightPanel = new QWidget(this);
+    QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
+    rightLayout->addWidget(metadataDisplay);
+    rightLayout->addWidget(annotationGroup);
+    rightLayout->addStretch();
+
+    // Create splitter
     mainSplitter = new QSplitter(Qt::Horizontal, this);
     mainSplitter->addWidget(imageView);
-    mainSplitter->addWidget(metadataDisplay);
-    mainSplitter->setSizes({600, 400});
-
+    mainSplitter->addWidget(rightPanel);
+    mainSplitter->setSizes({750, 250});
 
     setCentralWidget(mainSplitter);
-
     createMenuBar();
+
+    setWindowTitle("Medical Image Annotation Tool");
+    resize(1000, 700);
 
     clearMetadataDisplay();
 }
@@ -144,5 +163,109 @@ void MainWindow::clearMetadataDisplay() {
     welcomeText += "Load an image to begin...";
 
     metadataDisplay->setPlainText(welcomeText);
+}
+
+void MainWindow::createAnnotationControls()
+{
+    annotationGroup = new QGroupBox("Annotation Tools", this);
+    QVBoxLayout *layout = new QVBoxLayout(annotationGroup);
+
+    // mode selection
+    QLabel *modeLabel = new QLabel("Mode:", this);
+    layout->addWidget(modeLabel);
+
+    QHBoxLayout *modeLayout = new QHBoxLayout();
+    viewModeBtn = new QPushButton("View Mode", this);
+    viewModeBtn->setCheckable(true);
+    viewModeBtn->setChecked(true);
+
+    drawModeBtn = new QPushButton("Draw Mode", this);
+    drawModeBtn->setCheckable(true);
+
+    modeLayout->addWidget(viewModeBtn);
+    modeLayout->addWidget(drawModeBtn);
+    layout->addLayout(modeLayout);
+
+    // Current mode display
+    currentModeLabel = new QLabel("Current: View Mode", this);
+    currentModeLabel->setStyleSheet("QLabel { font-weight: bold; color: blue; }");
+    layout->addWidget(currentModeLabel);
+
+    // Line count display
+    lineCountLabel = new QLabel("Lines: 0", this);
+    lineCountLabel->setStyleSheet("QLabel { font-weight: bold; }");
+    layout->addWidget(lineCountLabel);
+
+    // Instructions
+    instructionsLabel = new QLabel(
+        "View Mode:\n"
+        "• Pan & Zoom\n"
+        "• Click line to select\n"
+        "• Delete key to remove\n\n"
+        "Draw Mode:\n"
+        "• Click & drag to draw lines", this);
+    instructionsLabel->setWordWrap(true);
+    instructionsLabel->setStyleSheet("QLabel { font-size: 10px; color: gray; }");
+    layout->addWidget(instructionsLabel);
+
+    // Action buttons
+    layout->addWidget(new QLabel("Actions:", this));
+
+    clearAllBtn = new QPushButton("Clear All Lines", this);
+    clearAllBtn->setEnabled(false);  // Disabled until lines exist
+    layout->addWidget(clearAllBtn);
+
+    deleteSelectedBtn = new QPushButton("Delete Selected", this);
+    deleteSelectedBtn->setEnabled(false);  // Disabled until line selected
+    layout->addWidget(deleteSelectedBtn);
+
+    // Connect
+    connect(viewModeBtn, &QPushButton::clicked, this, &MainWindow::toggleDrawingMode);
+    connect(drawModeBtn, &QPushButton::clicked, this, &MainWindow::toggleDrawingMode);
+    connect(clearAllBtn, &QPushButton::clicked, this, &MainWindow::clearAllAnnotations);
+    connect(deleteSelectedBtn, &QPushButton::clicked, this, &MainWindow::deleteSelectedAnnotation);
+}
+
+void MainWindow::toggleDrawingMode()
+{
+
+    if (viewModeBtn->isChecked()) {
+        isDrawingMode = false;
+        drawModeBtn->setChecked(false);
+        currentModeLabel->setText("Current: View Mode");
+        currentModeLabel->setStyleSheet("QLabel { font-weight: bold; color: blue; }");
+        // Tell annotation manager and image view
+        annotationManager->setDrawingMode(false);
+        imageView->setDrawingMode(false);
+    } else {
+        isDrawingMode = true;
+        viewModeBtn->setChecked(false);
+        currentModeLabel->setText("Current: Draw Mode");
+        currentModeLabel->setStyleSheet("QLabel { font-weight: bold; color: red; }");
+        // Tell annotation manager and image view
+        annotationManager->setDrawingMode(true);
+        imageView->setDrawingMode(true);
+    }
+}
+
+void MainWindow::clearAllAnnotations()
+{
+    annotationManager->clearAllLines();
+}
+
+void MainWindow::deleteSelectedAnnotation()
+{
+    annotationManager->deleteSelectedLine();
+}
+
+void MainWindow::updateAnnotationStatus(int lineCount)
+{
+    lineCountLabel->setText(QString("Lines: %1").arg(lineCount));
+    clearAllBtn->setEnabled(lineCount > 0);
+}
+
+void MainWindow::updateSelectionStatus(bool hasSelection)
+{
+    deleteSelectedBtn->setEnabled(hasSelection);
 }
 
