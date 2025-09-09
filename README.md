@@ -19,6 +19,8 @@
 ## Project Overview
 Medical Image Annotation Tool is a professional desktop application built using C++ and Qt framework for orthopedic physicians to load, view, and annotate DICOM medical images. The application enables precise line drawing for measurement and analysis of anatomical structures on X-rays, MRIs, CT scans, and standard medical imaging formats.
 
+![image](medDemo.gif)
+
 ---
 
 ## Features
